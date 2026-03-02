@@ -1,4 +1,4 @@
-# TTB Label Review Assistant
+# LabelPilot Assistant
 
 A local-first prototype for reviewing TTB (Alcohol and Tobacco Tax and Trade Bureau) label submissions. Built with Next.js App Router, Prisma/SQLite, and a Python OCR worker — designed so every component can be swapped for Azure services with minimal refactoring.
 

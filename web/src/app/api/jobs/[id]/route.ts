@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getSessionIdFromRequest } from '@/lib/session'
-import { localStorageAdapter } from '@/lib/storage/local'
+import { getStorageAdapter } from '@/lib/storage'
 import { errorResponse } from '@/lib/errors'
 
 type Params = { params: Promise<{ id: string }> }
@@ -53,7 +53,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     return new NextResponse(null, { status: 204 })
   }
 
-  await localStorageAdapter.deleteJob(id).catch((err) => {
+  await getStorageAdapter().deleteJob(id).catch((err) => {
     console.warn('[DELETE /api/jobs/:id] File deletion warning:', err)
   })
 

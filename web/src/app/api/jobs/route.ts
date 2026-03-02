@@ -3,7 +3,7 @@ import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { getOrCreateSessionId, getSessionIdFromRequest, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/session'
 import { validateUpload, sanitizeFilename, getExtension } from '@/lib/validation'
-import { localStorageAdapter } from '@/lib/storage/local'
+import { getStorageAdapter } from '@/lib/storage'
 import { errorResponse } from '@/lib/errors'
 import { checkRateLimit } from '@/lib/rateLimit'
 
@@ -83,14 +83,14 @@ export async function POST(request: NextRequest) {
         const asset = job.assets[i]
         const ext = getExtension(file.name)
         const buffer = Buffer.from(await file.arrayBuffer())
-        const storedPath = await localStorageAdapter.saveFile(job.id, asset.id, ext, buffer)
+        const storedPath = await getStorageAdapter().saveFile(job.id, asset.id, ext, buffer)
         await prisma.jobAsset.update({ where: { id: asset.id }, data: { storedPath } })
       })
     )
   } catch (err) {
     console.error('[POST /api/jobs] Storage error:', err)
     await prisma.job.delete({ where: { id: job.id } }).catch(() => undefined)
-    await localStorageAdapter.deleteJob(job.id).catch(() => undefined)
+    await getStorageAdapter().deleteJob(job.id).catch(() => undefined)
     return errorResponse('STORAGE_ERROR', 'Failed to save uploaded files.', 500)
   }
 

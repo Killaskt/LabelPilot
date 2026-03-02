@@ -1,0 +1,26 @@
+# Normalize all text files to LF in the repository.
+# Git will convert to LF on commit regardless of the OS used to edit them.
+# This ensures Python and shell scripts work correctly when deployed to Linux.
+* text=auto eol=lf
+
+# Windows batch/cmd files must stay CRLF or they break on Windows
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files — never touch line endings
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.db   binary
+*.db-journal binary
+*.db-wal     binary
+*.db-shm     binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary

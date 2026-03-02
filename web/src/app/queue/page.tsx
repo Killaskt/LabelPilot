@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { TERMINAL_STATUSES, type JobStatus } from '@/types'
 
@@ -18,6 +18,21 @@ interface QueueJob {
   totalBatchTime: number | null
   assets: { id: string; filename: string; assetOrder: number }[]
   _count: { results: number }
+}
+
+const stickyColHead: React.CSSProperties = {
+  position: 'sticky',
+  right: 0,
+  background: '#f8fafc',
+  boxShadow: '-2px 0 5px rgba(0,0,0,0.06)',
+  zIndex: 1,
+}
+
+const stickyColCell: React.CSSProperties = {
+  position: 'sticky',
+  right: 0,
+  background: '#fff',
+  boxShadow: '-2px 0 5px rgba(0,0,0,0.06)',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -107,18 +122,18 @@ export default function QueuePage() {
 
       {!loading && jobs.length > 0 && (
         <div className="table-wrap">
-          <table>
+          <table style={{ minWidth: 700 }}>
             <thead>
               <tr>
                 <th>Status</th>
                 <th>Brand / Class</th>
                 <th>Images</th>
                 <th>Submitted</th>
-                <th>Time to 1st Result</th>
+                <th>1st Result</th>
                 <th>Avg / Label</th>
                 <th>p95 / Label</th>
                 <th>Total</th>
-                <th>Action</th>
+                <th style={stickyColHead}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -140,7 +155,7 @@ export default function QueuePage() {
                   <td className="text-sm">{ms(job.avgPerLabel)}</td>
                   <td className="text-sm">{ms(job.p95PerLabel)}</td>
                   <td className="text-sm">{ms(job.totalBatchTime)}</td>
-                  <td>
+                  <td style={stickyColCell}>
                     {TERMINAL_STATUSES.has(job.status) && job.status !== 'deleted' && job.status !== 'expired' ? (
                       <Link href={`/review/${job.id}`} className="btn btn-accent btn-xs">
                         Review

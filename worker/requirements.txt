@@ -9,5 +9,11 @@ pytesseract>=0.3.10
 azure-ai-vision-imageanalysis>=1.0.0
 azure-core>=1.30.0
 
+# Storage — Azure Blob Storage (STORAGE_BACKEND=azure)
+azure-storage-blob>=12.19.0
+
+# Database — PostgreSQL (DATABASE_URL set, hybrid/prod only)
+psycopg2-binary>=2.9.0
+
 # Testing
 pytest>=7.4.0

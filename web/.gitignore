@@ -1,8 +1,12 @@
 .next/
 node_modules/
 .env
+.env.dev
+.env.hybrid
+.env.prod
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
 coverage/
+tsconfig.tsbuildinfo

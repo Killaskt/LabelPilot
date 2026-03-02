@@ -2,6 +2,22 @@ import { cookies } from 'next/headers'
 import Link from 'next/link'
 import prisma from '@/lib/prisma'
 import { DeleteButton } from './DeleteButton'
+import type { CSSProperties } from 'react'
+
+const stickyColHead: CSSProperties = {
+  position: 'sticky',
+  right: 0,
+  background: '#f8fafc',
+  boxShadow: '-2px 0 5px rgba(0,0,0,0.06)',
+  zIndex: 1,
+}
+
+const stickyColCell: CSSProperties = {
+  position: 'sticky',
+  right: 0,
+  background: '#fff',
+  boxShadow: '-2px 0 5px rgba(0,0,0,0.06)',
+}
 
 const STATUS_LABEL: Record<string, string> = {
   ready: 'Ready',
@@ -60,7 +76,7 @@ export default async function HistoryPage() {
         </div>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table style={{ minWidth: 640 }}>
             <thead>
               <tr>
                 <th>Brand / Class</th>
@@ -69,7 +85,7 @@ export default async function HistoryPage() {
                 <th>Submitted</th>
                 <th>Processed</th>
                 <th>Expires</th>
-                <th>Actions</th>
+                <th style={stickyColHead}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -95,8 +111,8 @@ export default async function HistoryPage() {
                     <td className="text-sm" style={{ color: isExpiringSoon ? 'var(--color-error)' : undefined }}>
                       {formatDate(expiresAt)}
                     </td>
-                    <td>
-                      <div className="flex-gap" style={{ flexWrap: 'wrap' }}>
+                    <td style={stickyColCell}>
+                      <div className="flex-gap">
                         {isReviewable && (
                           <Link href={`/review/${job.id}`} className="btn btn-accent btn-xs">
                             Review
@@ -104,12 +120,8 @@ export default async function HistoryPage() {
                         )}
                         {isReviewable && (
                           <>
-                            <Link href={`/api/jobs/${job.id}/export?format=csv`} className="btn btn-ghost btn-xs">
-                              CSV
-                            </Link>
-                            <Link href={`/api/jobs/${job.id}/export?format=json`} className="btn btn-ghost btn-xs">
-                              JSON
-                            </Link>
+                            <Link href={`/api/jobs/${job.id}/export?format=csv`} className="btn btn-ghost btn-xs">CSV</Link>
+                            <Link href={`/api/jobs/${job.id}/export?format=json`} className="btn btn-ghost btn-xs">JSON</Link>
                           </>
                         )}
                         <DeleteButton jobId={job.id} />

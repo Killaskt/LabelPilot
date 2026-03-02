@@ -8,6 +8,9 @@ local_uploads/*
 *.db-shm
 .env
 .env.local
+.env.dev
+.env.hybrid
+.env.prod
 __pycache__/
 *.pyc
 *.pyo
@@ -24,3 +27,6 @@ docs/
 
 # Generated Pillow fixtures (replaced by user-supplied test-picture/)
 worker/tests/fixtures/
+
+# Garbage file created by malformed pip install command
+worker/=*

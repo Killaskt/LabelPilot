@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getSessionIdFromRequest } from '@/lib/session'
-import { localStorageAdapter } from '@/lib/storage/local'
+import { getStorageAdapter } from '@/lib/storage'
 import { errorResponse } from '@/lib/errors'
 
 type Params = { params: Promise<{ jobId: string; assetId: string }> }
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   let buffer: Buffer
   try {
-    buffer = await localStorageAdapter.readFile(asset.storedPath)
+    buffer = await getStorageAdapter().readFile(asset.storedPath)
   } catch {
     return errorResponse('NOT_FOUND', 'File not found on disk.', 404)
   }

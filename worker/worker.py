@@ -5,7 +5,7 @@ import argparse
 import json
 import logging
 import os
-import sqlite3
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -14,11 +14,39 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env")
+
+def _resolve_env_file() -> Path:
+    """
+    Extract --env from argv before argparse runs so load_dotenv
+    gets the right profile file before module-level config is read.
+    Falls back to .env for backwards compatibility.
+    """
+    _pre = argparse.ArgumentParser(add_help=False)
+    _pre.add_argument("--env", default=None)
+    _pre_args, _ = _pre.parse_known_args()
+
+    if _pre_args.env:
+        env_file = Path(__file__).parent / f".env.{_pre_args.env}"
+        if env_file.exists():
+            return env_file
+        raise FileNotFoundError(f"Env profile not found: {env_file}")
+
+    # No --env given: try .env.dev first, fall back to .env
+    for name in (".env.dev", ".env"):
+        candidate = Path(__file__).parent / name
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError("No .env.dev or .env file found in worker/")
+
+
+_env_file = _resolve_env_file()
+load_dotenv(_env_file)
+print(f"[env] Loaded {_env_file.name}")
 
 import ocr
 import extraction
 import comparison
+from db import get_conn
 
 SQLITE_PATH = os.environ.get("SQLITE_PATH", "../web/prisma/dev.db")
 UPLOAD_BASE_DIR = os.environ.get("UPLOAD_BASE_DIR", "../local_uploads")
@@ -38,27 +66,22 @@ FIELDS = [
     "governmentWarning",
 ]
 
-
-def get_conn() -> sqlite3.Connection:
-    db_path = Path(SQLITE_PATH).resolve()
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+# A field passes at the job level when at least one asset produces a "match"
+# result with OCR confidence at or above this threshold.
+MATCH_CONF_THRESHOLD = float(os.environ.get("MATCH_CONF_THRESHOLD", "0.70"))
 
 
-def claim_next_job(conn: sqlite3.Connection) -> Optional[dict]:
+def claim_next_job(conn) -> Optional[dict]:
     now_iso = datetime.now(timezone.utc).isoformat()
     with conn:
         cur = conn.execute(
             """
-            UPDATE Job
-            SET status = 'processing', startedAt = ?
+            UPDATE "Job"
+            SET status = 'processing', "startedAt" = ?
             WHERE id = (
-                SELECT id FROM Job
+                SELECT id FROM "Job"
                 WHERE status = 'queued'
-                ORDER BY createdAt ASC
+                ORDER BY "createdAt" ASC
                 LIMIT 1
             )
             RETURNING *
@@ -69,16 +92,16 @@ def claim_next_job(conn: sqlite3.Connection) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def get_assets(conn: sqlite3.Connection, job_id: str) -> list[dict]:
+def get_assets(conn, job_id: str) -> list[dict]:
     cur = conn.execute(
-        "SELECT * FROM JobAsset WHERE jobId = ? ORDER BY assetOrder ASC",
+        'SELECT * FROM "JobAsset" WHERE "jobId" = ? ORDER BY "assetOrder" ASC',
         (job_id,),
     )
     return [dict(r) for r in cur.fetchall()]
 
 
 def insert_result(
-    conn: sqlite3.Connection,
+    conn,
     job_id: str,
     asset_id: str,
     field: str,
@@ -92,9 +115,9 @@ def insert_result(
     with conn:
         conn.execute(
             """
-            INSERT INTO JobResult
-              (id, jobId, assetId, field, foundValue, expectedValue,
-               confidence, status, bboxJson, needsHuman, processingTimeMs, createdAt)
+            INSERT INTO "JobResult"
+              (id, "jobId", "assetId", field, "foundValue", "expectedValue",
+               confidence, status, "bboxJson", "needsHuman", "processingTimeMs", "createdAt")
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -107,7 +130,7 @@ def insert_result(
                 result.get("confidence", 0.0),
                 result.get("status", "not_found"),
                 bbox_json,
-                1 if result.get("needs_human", True) else 0,
+                bool(result.get("needs_human", True)),
                 processing_ms,
                 now_iso,
             ),
@@ -115,7 +138,7 @@ def insert_result(
 
 
 def finish_job(
-    conn: sqlite3.Connection,
+    conn,
     job_id: str,
     final_status: str,
     metrics: dict,
@@ -125,10 +148,10 @@ def finish_job(
     with conn:
         conn.execute(
             """
-            UPDATE Job
-            SET status = ?, finishedAt = ?, errorMessage = ?,
-                timeToFirstResult = ?, avgPerLabel = ?,
-                p95PerLabel = ?, totalBatchTime = ?
+            UPDATE "Job"
+            SET status = ?, "finishedAt" = ?, "errorMessage" = ?,
+                "timeToFirstResult" = ?, "avgPerLabel" = ?,
+                "p95PerLabel" = ?, "totalBatchTime" = ?
             WHERE id = ?
             """,
             (
@@ -176,15 +199,23 @@ def process_job(job: dict) -> None:
         first_result_ms: Optional[float] = None
         per_label_ms: list[float] = []
         any_needs_human = False
+        # Tracks comparison results per field across all assets so we can
+        # apply the multi-image rule after the loop.
+        per_field_results: dict[str, list[dict]] = {f: [] for f in FIELDS}
 
         for asset in assets:
             asset_start = time.perf_counter()
-            stored_path = asset["storedPath"].replace("/", os.sep)
-            image_path = str((Path(UPLOAD_BASE_DIR) / stored_path).resolve())
+            logger.info("  Asset %s: %s", asset["id"], asset["storedPath"])
 
-            logger.info("  Asset %s: %s", asset["id"], image_path)
-
+            temp_image: Optional[str] = None
             try:
+                if os.environ.get("STORAGE_BACKEND") == "azure":
+                    image_path = _download_blob_to_temp(asset["storedPath"])
+                    temp_image = image_path
+                else:
+                    stored_path = asset["storedPath"].replace("/", os.sep)
+                    image_path = str((Path(UPLOAD_BASE_DIR) / stored_path).resolve())
+
                 ocr_result = ocr.extract_text_with_boxes(image_path)
                 full_text = ocr_result["full_text"]
                 words = ocr_result["words"]
@@ -216,25 +247,18 @@ def process_job(job: dict) -> None:
                     else:
                         comp = {"status": "not_found", "needs_human": True}
 
-                    if comp["needs_human"]:
-                        any_needs_human = True
+                    result_entry = {
+                        "found_value": ext.get("value"),
+                        "expected_value": expected[field],
+                        "confidence": ext.get("confidence", 0.0),
+                        "status": comp["status"],
+                        "needs_human": comp["needs_human"],
+                        "bbox": ext.get("bbox"),
+                    }
+                    per_field_results[field].append(result_entry)
 
                     field_ms = (time.perf_counter() - field_start) * 1000
-                    insert_result(
-                        conn,
-                        job_id,
-                        asset["id"],
-                        field,
-                        {
-                            "found_value": ext.get("value"),
-                            "expected_value": expected[field],
-                            "confidence": ext.get("confidence", 0.0),
-                            "status": comp["status"],
-                            "needs_human": comp["needs_human"],
-                            "bbox": ext.get("bbox"),
-                        },
-                        field_ms,
-                    )
+                    insert_result(conn, job_id, asset["id"], field, result_entry, field_ms)
 
                 if first_result_ms is None:
                     first_result_ms = (time.perf_counter() - job_start) * 1000
@@ -247,6 +271,12 @@ def process_job(job: dict) -> None:
                 logger.error("  Failed to process asset %s: %s", asset["id"], exc, exc_info=True)
                 _save_error_results(conn, job_id, asset["id"], expected)
                 any_needs_human = True
+            finally:
+                if temp_image and os.path.exists(temp_image):
+                    try:
+                        os.unlink(temp_image)
+                    except Exception:
+                        pass
 
             label_ms = (time.perf_counter() - asset_start) * 1000
             per_label_ms.append(label_ms)
@@ -259,6 +289,29 @@ def process_job(job: dict) -> None:
             "p95_per_label": percentile(per_label_ms, 95),
             "total": total_ms,
         }
+
+        # Multi-image rule: a field passes if at least one asset produced a
+        # high-confidence match, even if other assets disagreed (conflict).
+        # any_needs_human may already be True from a processing error above.
+        for field in FIELDS:
+            results = per_field_results[field]
+            has_confident_match = any(
+                r["status"] == "match" and (r["confidence"] or 0.0) >= MATCH_CONF_THRESHOLD
+                for r in results
+            )
+            if not has_confident_match:
+                any_needs_human = True
+            elif len(results) > 1:
+                conflicts = sum(1 for r in results if r["status"] != "match")
+                if conflicts:
+                    logger.info(
+                        "  Field %s: passed on %d/%d images (%d conflict%s)",
+                        field,
+                        len(results) - conflicts,
+                        len(results),
+                        conflicts,
+                        "s" if conflicts > 1 else "",
+                    )
 
         final_status = "needs_human" if any_needs_human else "ready"
         finish_job(conn, job_id, final_status, metrics)
@@ -276,6 +329,22 @@ def process_job(job: dict) -> None:
             pass
     finally:
         conn.close()
+
+
+def _download_blob_to_temp(blob_name: str) -> str:
+    """Download a blob to a temp file, return the temp file path."""
+    from azure.storage.blob import BlobServiceClient
+    connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+    container_name = os.environ.get("AZURE_STORAGE_CONTAINER", "labelpilotdb")
+    blob_client = (
+        BlobServiceClient.from_connection_string(connection_string)
+        .get_blob_client(container=container_name, blob=blob_name)
+    )
+    ext = Path(blob_name).suffix
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp_path = tmp.name
+        tmp.write(blob_client.download_blob().readall())
+    return tmp_path
 
 
 def _save_error_results(conn, job_id, asset_id, expected):
@@ -298,7 +367,13 @@ def _save_error_results(conn, job_id, asset_id, expected):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TTB Label Review Worker")
+    parser = argparse.ArgumentParser(description="LabelPilot Worker")
+    parser.add_argument(
+        "--env",
+        default=None,
+        metavar="PROFILE",
+        help="Environment profile to load (.env.dev, .env.hybrid, .env.prod). Default: .env.dev",
+    )
     parser.add_argument(
         "--backend",
         choices=["tesseract", "azure"],
@@ -312,21 +387,26 @@ def main() -> None:
 
     active_backend = os.environ.get("OCR_BACKEND", "tesseract")
 
-    db_path = Path(SQLITE_PATH).resolve()
     upload_dir = Path(UPLOAD_BASE_DIR).resolve()
+    database_url = os.environ.get("DATABASE_URL")
+    db_label = database_url.split("@")[-1] if database_url else str(Path(SQLITE_PATH).resolve())
 
     logger.info("Worker starting")
-    logger.info("  DB:      %s", db_path)
+    logger.info("  DB:      %s", db_label)
     logger.info("  Uploads: %s", upload_dir)
     logger.info("  Poll:    %.1fs", POLL_INTERVAL)
     logger.info("  Backend: %s", active_backend)
 
-    if not db_path.exists():
-        logger.error(
-            "SQLite file not found at %s — run `npm run db:migrate` in web/ first.",
-            db_path,
-        )
-        return
+    # For SQLite only — check the file exists before starting the poll loop.
+    # PostgreSQL connectivity is verified on first connection attempt instead.
+    if not database_url:
+        db_path = Path(SQLITE_PATH).resolve()
+        if not db_path.exists():
+            logger.error(
+                "SQLite file not found at %s — run `npm run db:migrate` in web/ first.",
+                db_path,
+            )
+            return
 
     while True:
         try:
