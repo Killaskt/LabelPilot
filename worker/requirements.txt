@@ -1,0 +1,13 @@
+# Core
+Pillow>=10.0.0
+python-dotenv>=1.0.0
+
+# OCR — Tesseract backend (install binary separately: https://github.com/tesseract-ocr/tesseract)
+pytesseract>=0.3.10
+
+# OCR — Azure AI Vision backend (OCR_BACKEND=azure)
+azure-ai-vision-imageanalysis>=1.0.0
+azure-core>=1.30.0
+
+# Testing
+pytest>=7.4.0

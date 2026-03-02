@@ -1,0 +1,33 @@
+Collecting azure-ai-vision-imageanalysis
+  Downloading azure_ai_vision_imageanalysis-1.0.0-py3-none-any.whl.metadata (22 kB)
+Collecting azure-core
+  Downloading azure_core-1.38.2-py3-none-any.whl.metadata (48 kB)
+Collecting isodate>=0.6.1 (from azure-ai-vision-imageanalysis)
+  Downloading isodate-0.7.2-py3-none-any.whl.metadata (11 kB)
+Collecting typing-extensions>=4.6.0 (from azure-ai-vision-imageanalysis)
+  Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting requests>=2.21.0 (from azure-core)
+  Using cached requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.21.0->azure-core)
+  Using cached charset_normalizer-3.4.4-cp313-cp313-win_amd64.whl.metadata (38 kB)
+Collecting idna<4,>=2.5 (from requests>=2.21.0->azure-core)
+  Using cached idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Collecting urllib3<3,>=1.21.1 (from requests>=2.21.0->azure-core)
+  Downloading urllib3-2.6.3-py3-none-any.whl.metadata (6.9 kB)
+Collecting certifi>=2017.4.17 (from requests>=2.21.0->azure-core)
+  Downloading certifi-2026.2.25-py3-none-any.whl.metadata (2.5 kB)
+Downloading azure_ai_vision_imageanalysis-1.0.0-py3-none-any.whl (64 kB)
+Downloading azure_core-1.38.2-py3-none-any.whl (217 kB)
+Downloading isodate-0.7.2-py3-none-any.whl (22 kB)
+Using cached requests-2.32.5-py3-none-any.whl (64 kB)
+Using cached charset_normalizer-3.4.4-cp313-cp313-win_amd64.whl (107 kB)
+Using cached idna-3.11-py3-none-any.whl (71 kB)
+Downloading urllib3-2.6.3-py3-none-any.whl (131 kB)
+Downloading certifi-2026.2.25-py3-none-any.whl (153 kB)
+Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Installing collected packages: urllib3, typing-extensions, isodate, idna, charset_normalizer, certifi, requests, azure-core, azure-ai-vision-imageanalysis
+
+Successfully installed azure-ai-vision-imageanalysis-1.0.0 azure-core-1.38.2 certifi-2026.2.25 charset_normalizer-3.4.4 idna-3.11 isodate-0.7.2 requests-2.32.5 typing-extensions-4.15.0 urllib3-2.6.3
+
+[notice] A new release of pip is available: 25.3 -> 26.0.1
+[notice] To update, run: C:\Users\thegi\Documents\coding\labelPilot\worker\.venv\Scripts\python.exe -m pip install --upgrade pip

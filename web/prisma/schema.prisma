@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// status: queued | processing | ready | needs_human | error | deleted | expired
+model Job {
+  id             String   @id @default(cuid())
+  sessionId      String
+  status         String   @default("queued")
+
+  brandName      String
+  classType      String
+  alcoholContent String
+  netContents    String
+
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  errorMessage   String?
+
+  timeToFirstResult Float?
+  avgPerLabel       Float?
+  p95PerLabel       Float?
+  totalBatchTime    Float?
+
+  assets    JobAsset[]
+  results   JobResult[]
+  overrides Override[]
+}
+
+model JobAsset {
+  id          String   @id @default(cuid())
+  jobId       String
+  filename    String
+  storedPath  String
+  mimeType    String
+  assetOrder  Int
+  createdAt   DateTime @default(now())
+
+  job     Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  results JobResult[]
+}
+
+model JobResult {
+  id               String  @id @default(cuid())
+  jobId            String
+  assetId          String
+  field            String
+  foundValue       String?
+  expectedValue    String?
+  confidence       Float?
+  status           String
+  bboxJson         String?
+  needsHuman       Boolean  @default(false)
+  processingTimeMs Float?
+  createdAt        DateTime @default(now())
+
+  job   Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  asset JobAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model Override {
+  id        String   @id @default(cuid())
+  jobId     String
+  assetId   String?
+  field     String
+  action    String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, field])
+}
