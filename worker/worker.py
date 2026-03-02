@@ -71,6 +71,19 @@ FIELDS = [
 MATCH_CONF_THRESHOLD = float(os.environ.get("MATCH_CONF_THRESHOLD", "0.70"))
 
 
+def _field_passes(field_results: list[dict]) -> bool:
+    """Return True when the multi-image compliance rule is satisfied.
+
+    A field passes if at least one asset produced a 'match' result with
+    OCR confidence >= MATCH_CONF_THRESHOLD. If no image clears that bar
+    the field is flagged for human review.
+    """
+    return any(
+        r["status"] == "match" and (r["confidence"] or 0.0) >= MATCH_CONF_THRESHOLD
+        for r in field_results
+    )
+
+
 def claim_next_job(conn) -> Optional[dict]:
     now_iso = datetime.now(timezone.utc).isoformat()
     with conn:
@@ -295,11 +308,7 @@ def process_job(job: dict) -> None:
         # any_needs_human may already be True from a processing error above.
         for field in FIELDS:
             results = per_field_results[field]
-            has_confident_match = any(
-                r["status"] == "match" and (r["confidence"] or 0.0) >= MATCH_CONF_THRESHOLD
-                for r in results
-            )
-            if not has_confident_match:
+            if not _field_passes(results):
                 any_needs_human = True
             elif len(results) > 1:
                 conflicts = sum(1 for r in results if r["status"] != "match")

@@ -18,6 +18,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/queue">Queue</Link>
             <Link href="/history">History</Link>
           </div>
+          <form method="post" action="/api/auth/logout" style={{ marginLeft: 'auto' }}>
+            <button
+              type="submit"
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 'var(--radius)',
+                color: 'rgba(255,255,255,0.7)',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                padding: '0.3rem 0.65rem',
+              }}
+            >
+              Sign out
+            </button>
+          </form>
         </nav>
         {children}
       </body>

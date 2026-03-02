@@ -42,7 +42,7 @@ class _Result:
         return self._rows[0] if self._rows else None
 
     def fetchall(self) -> list[dict]:
-        return self._rows
+        return list(self._rows)
 
 
 # ─── SQLite wrapper ───────────────────────────────────────────────────────────
