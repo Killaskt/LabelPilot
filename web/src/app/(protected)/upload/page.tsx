@@ -8,6 +8,8 @@ interface FormFields {
   classType: string
   alcoholContent: string
   netContents: string
+  bottlerInfo: string
+  countryOfOrigin: string
 }
 
 const INITIAL_FIELDS: FormFields = {
@@ -15,6 +17,8 @@ const INITIAL_FIELDS: FormFields = {
   classType: '',
   alcoholContent: '',
   netContents: '',
+  bottlerInfo: '',
+  countryOfOrigin: '',
 }
 
 export default function UploadPage() {
@@ -24,6 +28,7 @@ export default function UploadPage() {
   const [thumbnails, setThumbnails] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [additionalOpen, setAdditionalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,6 +69,8 @@ export default function UploadPage() {
       fd.append('classType', fields.classType.trim())
       fd.append('alcoholContent', fields.alcoholContent.trim())
       fd.append('netContents', fields.netContents.trim())
+      if (fields.bottlerInfo.trim()) fd.append('bottlerInfo', fields.bottlerInfo.trim())
+      if (fields.countryOfOrigin.trim()) fd.append('countryOfOrigin', fields.countryOfOrigin.trim())
       files.forEach((f) => fd.append('files', f))
 
       const res = await fetch('/api/jobs', { method: 'POST', body: fd })
@@ -148,6 +155,65 @@ export default function UploadPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Collapsible additional fields */}
+        <div className="card mb-2" style={{ padding: 0, overflow: 'hidden' }}>
+          <button
+            type="button"
+            onClick={() => setAdditionalOpen((v) => !v)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.75rem 1rem',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+              Additional Fields
+              <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', fontSize: '0.82rem', marginLeft: '0.4rem' }}>
+                (optional — not OCR-verified)
+              </span>
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', transition: 'transform 0.2s', display: 'inline-block', transform: additionalOpen ? 'rotate(180deg)' : 'none' }}>
+              ▾
+            </span>
+          </button>
+
+          {additionalOpen && (
+            <div style={{ padding: '0 1rem 1rem' }}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="bottlerInfo">Bottler / Producer Name &amp; Address</label>
+                  <input
+                    id="bottlerInfo"
+                    name="bottlerInfo"
+                    className="form-input"
+                    value={fields.bottlerInfo}
+                    onChange={handleFieldChange}
+                    placeholder="e.g. Mountain Creek Distillery, Louisville KY"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="countryOfOrigin">Country of Origin</label>
+                  <input
+                    id="countryOfOrigin"
+                    name="countryOfOrigin"
+                    className="form-input"
+                    value={fields.countryOfOrigin}
+                    onChange={handleFieldChange}
+                    placeholder="e.g. USA"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card mb-2">

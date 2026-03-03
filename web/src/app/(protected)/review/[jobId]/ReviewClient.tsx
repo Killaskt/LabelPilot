@@ -104,6 +104,7 @@ export default function ReviewClient({ initialJob }: Props) {
   const [activeHighlightField, setActiveHighlightField] = useState<FieldName | null>(null)
   const [overrideLoading, setOverrideLoading] = useState<FieldName | null>(null)
   const [overrideError, setOverrideError] = useState<string | null>(null)
+  const [additionalOpen, setAdditionalOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
   const imgRef = useRef<HTMLImageElement>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -285,6 +286,7 @@ export default function ReviewClient({ initialJob }: Props) {
               </span>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0.5rem', paddingBottom: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              {/* Checklist fields */}
               {ALL_FIELDS.map((field) => {
                 const { status, isOverridden, override, needsHuman, hasConflict, conflictCount } = aggregateFieldStatus(
                   job.results, field, job.overrides
@@ -415,6 +417,50 @@ export default function ReviewClient({ initialJob }: Props) {
                   </div>
                 )
               })}
+
+              {/* Additional context — collapsible */}
+              {(job.bottlerInfo || job.countryOfOrigin) && (
+                <div style={{ borderRadius: 'var(--radius)', border: '1px solid var(--color-border)', background: 'var(--color-surface)', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAdditionalOpen((v) => !v)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.45rem 0.65rem',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.81rem' }}>Additional Context</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'inline-block', transition: 'transform 0.2s', transform: additionalOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+                  </button>
+                  {additionalOpen && (
+                    <div style={{ padding: '0 0.65rem 0.55rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)', margin: '0 0 0.3rem', fontStyle: 'italic' }}>
+                        Provided for reference — not OCR-verified.
+                      </p>
+                      {job.bottlerInfo && (
+                        <div style={{ fontSize: '0.76rem' }}>
+                          <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Bottler</span>
+                          <div style={{ marginTop: 2 }}>{job.bottlerInfo}</div>
+                        </div>
+                      )}
+                      {job.countryOfOrigin && (
+                        <div style={{ fontSize: '0.76rem' }}>
+                          <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Country of Origin</span>
+                          <div style={{ marginTop: 2 }}>{job.countryOfOrigin}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,234 +1,216 @@
-# LabelPilot Assistant
+# LabelPilot
 
-A local-first prototype for reviewing TTB (Alcohol and Tobacco Tax and Trade Bureau) label submissions. Built with Next.js App Router, Prisma/SQLite, and a Python OCR worker — designed so every component can be swapped for Azure services with minimal refactoring.
+A prototype tool for TTB alcohol label compliance review. An agent enters the declared application fields, uploads the label artwork, and gets a pass/fail on every required field within seconds — without blocking their workflow.
 
----
-
-## How it works
-
-1. **Upload** — Submit application fields (brand name, class/type, ABV, net contents) and 1–10 label images.
-2. **Queue** — Jobs are written to SQLite with `status=queued`. The queue page polls every 2 seconds.
-3. **Worker** — A Python process polls the DB, claims jobs atomically, runs OCR + regex extraction, compares results against submitted values, and writes back `status=ready|needs_human|error`.
-4. **Review** — A split-pane review page shows a field checklist (match/mismatch/needs-review) on the left and a zoomable image viewer with highlight rectangles on the right. Accept or Reject each field, then click **Finish Review**.
-5. **History** — Recent jobs (last 24 hours). All jobs auto-expire; a cleanup script purges them.
+**Live demo:** https://labelpilot-web.delightfulocean-7862ed4a.eastus.azurecontainerapps.io
+**Access code:** available on request
 
 ---
 
-## Quick Start
+## What it does
+
+Agent enters what the application declares (brand name, class/type, ABV, net contents), uploads 1–10 label images, and the tool OCRs the artwork and compares field by field. Every ambiguous result is flagged for human review with a bounding box showing exactly where on the label the text was found. The agent accepts, rejects, or overrides each field and exports the decision record.
+
+Fields verified:
+
+- Brand name
+- Class / type designation
+- Alcohol content
+- Net contents
+- Government warning — all-caps `GOVERNMENT WARNING:` enforced; title case caught and flagged as TTB non-compliant
+
+The agent always has the final say. Every field can be accepted, rejected, or overridden with a note in one click — the OCR result is a starting point, not a verdict. This is intentional: the tool handles the mechanical matching so the agent can focus their judgment on the cases that actually need it.
+
+Bottler name/address and country of origin can be entered as optional context. They appear in the review checklist but are not OCR-verified in this version.
+
+---
+
+## Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| Web | Next.js 15, TypeScript, Prisma | Fast server-rendered UI, type safety end-to-end, clean ORM for a schema that will evolve |
+| Database | PostgreSQL (Azure) | Reliable, cloud-managed, doubles as the job queue for this prototype |
+| OCR | Azure AI Vision + Tesseract fallback | Best accuracy on real-world labels; Tesseract ensures the pipeline never hard-fails |
+| Storage | Azure Blob Storage | Keeps images inside the Azure boundary, scales without config |
+| Worker | Python 3.11 | Mature OCR and image tooling ecosystem; runs independently so the web layer is never blocked |
+| Hosting | Azure Container Apps | Managed containers with built-in ingress, secrets, and scaling — no infra overhead |
+
+---
+
+## Dev Tooling
+--- ideation and fighting tougher bugs, assist building to move fast
+- Claude Code
+- Cursor, Azure MCP Server 
+
+---
+
+## Pipeline
+
+```
+Agent submits fields + images
+        ↓
+Web validates, writes Job to PostgreSQL (status: queued)
+Responds immediately — agent is not blocked
+        ↓
+Python worker polls DB, claims job
+Downloads image from Azure Blob Storage (internal)
+Runs Azure Vision OCR  →  Tesseract fallback if endpoint unavailable
+Extracts each field (regex + four-tier fuzzy matching)
+Compares against declared values, writes results to DB
+        ↓
+Review page polls and renders results as they arrive
+Agent sees first result within ~5 seconds of upload
+Agent reviews pass/fail per field, overrides where needed
+Job marked complete, decision record exportable as CSV or JSON
+```
+
+Multiple images per application are handled natively. A field passes if it is found with sufficient confidence in **any** of the submitted label panels — which is how TTB evaluates a complete label submission across front, back, and neck panels.
+
+The web server and worker never talk to each other directly. They coordinate only through the database, keeping the two processes fully decoupled.
+
+---
+
+## Design decisions
+
+**Separate worker process** — OCR on a real label takes 1–3 seconds per image. Offloading to a background worker keeps the web response instant and lets multiple labels process in parallel. The agent is never blocked waiting.
+
+**Azure Vision over a vision LLM** — A vision LLM would be more flexible but non-deterministic: confidence scores vary on identical inputs and it is difficult to explain to a compliance agent exactly why a field failed. The structured OCR + regex approach gives consistent, auditable, explainable results. It also eliminates the prompt injection surface entirely — no user input is ever passed to a language model.
+
+**Azure Vision over Tesseract** — In testing on real labels, Tesseract missed fields that Azure Vision caught reliably, especially on decorative fonts and slightly skewed shots. Tesseract is retained as an automatic fallback if the Azure endpoint is unavailable, so the pipeline degrades gracefully rather than failing.
+
+**Manual field entry** — This prototype does not integrate with COLA. The agent keys in the declared values for proof of concept. The architecture is structured so that COLA integration is a data-source swap, not a redesign.
+
+---
+
+## Security
+
+### Upload hardening
+
+Every file upload passes through a layered validation stack before anything is stored or processed:
+
+- **MIME type whitelist** — only `image/png` and `image/jpeg` accepted
+- **Magic bytes inspection** — first 8 bytes of each file are read and matched against the actual PNG (`\x89PNG`) and JPEG (`\xFF\xD8\xFF`) signatures; declared type and extension cannot be spoofed
+- **Double-extension blocking** — filenames like `evil.php.jpg` are rejected outright
+- **File size limit** — 10 MB per file (configurable via env)
+- **File count limit** — 1–10 files per submission
+- **Empty file rejection** — zero-byte files blocked
+- **Filename sanitization** — path traversal characters, null bytes, and special characters stripped before storage
+
+### API and session security
+
+- All protected routes verify a session cookie server-side before any processing occurs
+- Input validated with strict Zod schemas (types, lengths, required fields) on every endpoint
+- Rate limiting: 20 requests per 60-second window per session, enforced before any DB or storage call
+- Error responses never expose stack traces, query details, or internal paths
+- HTTPS enforced at the Azure Container Apps ingress layer — no plaintext traffic
+- Session cookie is `httpOnly`, `SameSite=Lax`, with a 24-hour TTL matching data retention
+
+### Auth
+
+A shared invite code gates all protected routes. This is explicitly a prototype control — it demonstrates the auth boundary without requiring Azure AD provisioning for evaluation. The session model (httpOnly cookie → server-validated session ID) is structured to swap directly to per-account token-based auth in a future iteration. See Planned Work.
+
+### Cloud containment — no outbound traffic outside Azure
+
+Every service call in the pipeline is internal to Azure East US:
+
+| From | To | Channel |
+|---|---|---|
+| Web container | PostgreSQL | Azure internal, TLS |
+| Web container | Blob Storage | Azure SDK, TLS |
+| Worker container | PostgreSQL | Azure internal, TLS |
+| Worker container | Blob Storage | Azure SDK, TLS |
+| Worker container | Azure Vision | Azure Cognitive Services, TLS |
+
+No user data leaves the Azure boundary and its all marked for deletion. No user-controlled URLs are ever fetched by the system (SSRF prevention by design). Azure credentials are stored as Container Apps secrets and are never present in application code or client-side bundles. All resource access is loggable and auditable via Azure Monitor and Log Analytics.
+
+This architecture is aligned with **Microsoft's enterprise compliance posture** — Azure is FedRAMP High authorized (Azure Government), holds a FedRAMP Moderate authorization on the commercial cloud, and operates under Microsoft's standard data processing and data protection agreements. A production deployment targeting federal use would go through the formal ATO process on Azure Government, but the architectural choices here are consistent with that path.
+
+### Data lifecycle and privacy
+
+- All jobs, results, uploaded images, and associated artifacts are set to expire after **24 hours**
+- On deletion (manual or automatic expiry), images are removed from Blob Storage and all DB records are purged — no orphaned artifacts
+- Session IDs are random UUIDs — no PII is stored or linked to a session
+- No analytics, telemetry, or third-party scripts are loaded in the browser
+- Retention window can be tightened to session-end if the data handling requirement demands it
+
+### No prompt injection surface
+
+Because the AI component is Azure Vision (a structured OCR API), there is no language model in the processing pipeline. User-supplied text is never interpolated into an AI prompt. Field comparison is entirely deterministic. This is a deliberate security choice as much as an auditability one.
+
+### What a hardened production deployment would add
+
+- **Private endpoints** for PostgreSQL and Blob Storage — currently both are internet-accessible with credential auth; VNet integration closes this
+- **Managed Identity** for the worker — removes all connection strings from environment variables; access is logged against the identity in Azure's audit trail
+- **Azure Key Vault** — centralize and rotate secrets without redeployment
+- **Azure WAF / Front Door** — DDoS protection and geo-restriction (US traffic only) at the network edge
+- **Azure Defender for Storage** — malware scanning on blob uploads as a second pass after our own validation
+- **CSP headers** — Content-Security-Policy to restrict script execution in the browser
+- **Audit log per decision** — every agent override persisted with timestamp and session, queryable for compliance audits
+
+---
+
+## Local setup
 
 ### Prerequisites
-- Node.js ≥ 18
-- Python ≥ 3.10
-- **OCR backend** — either Tesseract (local) or Azure AI Vision credentials (see below)
+- Node.js ≥ 18, Python ≥ 3.10
+- Azure AI Vision resource (or use Tesseract for local/offline)
 
-### 1. Set up the web app
-
+### Web
 ```bash
 cd web
 cp .env.example .env
 npm install
-npm run db:migrate       # creates web/prisma/dev.db and applies schema
-npm run dev              # starts Next.js on http://localhost:3000
+npm run db:migrate
+npm run dev               # http://localhost:3000
 ```
 
-### 2. Set up the worker (second terminal)
-
+### Worker (second terminal)
 ```bash
 cd worker
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python -m venv .venv && .venv/Scripts/activate
 pip install -r requirements.txt
-cp .env.example .env           # then edit .env with your OCR backend settings
+cp .env.example .env      # set OCR_BACKEND + credentials
 python worker.py
 ```
 
-### 3. Open the app
+### OCR backends
 
-Navigate to http://localhost:3000/upload
+**Azure AI Vision** (recommended) — handles decorative fonts, label skew, and uneven lighting. Set `OCR_BACKEND=azure` with your endpoint and key.
 
----
+**Tesseract** — offline, no credentials needed. Set `OCR_BACKEND=tesseract`. Reliable for clean scans; struggles with stylised or angled text.
 
-## OCR Backends
-
-The worker supports two OCR backends, switchable via `OCR_BACKEND` in `worker/.env`. Azure AI Vision is recommended for production — it handles multi-line text, decorative fonts, and low-contrast labels significantly better than Tesseract.
-
-### Option A — Azure AI Vision (recommended)
-
-1. In [Azure Portal](https://portal.azure.com) create a **Computer Vision** resource (F0 free tier: 5,000 calls/month, 20 calls/minute)
-2. Go to **Keys and Endpoint** and copy Key 1 + the Endpoint URL
-3. Set in `worker/.env`:
-
-```env
-OCR_BACKEND=azure
-AZURE_VISION_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
-AZURE_VISION_KEY=your-key-here
-```
-
-> **Production note:** When deployed to Azure Container Apps, replace `AZURE_VISION_KEY` with a Managed Identity — no secrets stored anywhere.
-
-### Option B — Tesseract (local, offline)
-
-1. Install the Tesseract binary: https://github.com/tesseract-ocr/tesseract
-2. Set in `worker/.env`:
-
-```env
-OCR_BACKEND=tesseract
-TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe   # Windows example
-```
-
-If `TESSERACT_CMD` is not set, Tesseract must be on your system PATH. If neither backend is available the worker falls back to a stub that flags all fields for human review.
+**Stub** — if neither is configured, all fields are flagged for human review. Useful for UI development and testing without credentials.
 
 ---
 
-## Environment Variables
-
-### web/.env
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `file:./prisma/dev.db` | Prisma SQLite connection string |
-| `UPLOAD_DIR` | `../local_uploads` | Where uploaded files are stored |
-| `MAX_FILE_SIZE_MB` | `10` | Per-file size limit |
-| `MAX_FILES` | `10` | Max files per job |
-| `RATE_LIMIT_MAX_REQUESTS` | `20` | Requests per window |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
-
-### worker/.env
-
-| Variable | Default | Description |
-|---|---|---|
-| `SQLITE_PATH` | `../web/prisma/dev.db` | Path to the SQLite file |
-| `UPLOAD_BASE_DIR` | `../local_uploads` | Must match web's UPLOAD_DIR |
-| `POLL_INTERVAL` | `1.0` | Seconds between DB polls |
-| `LOG_LEVEL` | `INFO` | Python log level |
-| `OCR_BACKEND` | `tesseract` | `tesseract` or `azure` |
-| `TESSERACT_CMD` | _(unset)_ | Full path to tesseract binary (Windows) |
-| `AZURE_VISION_ENDPOINT` | _(unset)_ | Azure AI Vision endpoint URL |
-| `AZURE_VISION_KEY` | _(unset)_ | Azure AI Vision API key |
-| `WORD_MATCH_THRESHOLD` | `0.75` | Fraction of words required for a word-level field match (0.5–1.0) |
-| `MIN_OCR_WORD_CONF` | `0.0` | Minimum word confidence to include (0–1). Raise to filter OCR noise. |
-
----
-
-## Running Tests
-
-### Worker (Python)
+## Tests
 
 ```bash
-cd worker
-.venv/Scripts/activate          # Windows
-# source .venv/bin/activate     # macOS/Linux
-python -m pytest tests/ -v
+cd worker && python -m pytest tests/ -v   # 114 tests
+cd web && npm test                         # 52 tests
 ```
 
-Test coverage:
-
-| File | What it covers |
-|---|---|
-| `test_extraction.py` | Regex patterns for ABV, volume, government warning |
-| `test_mismatch.py` | Match / soft-mismatch / mismatch / not-found classification |
-| `test_normalization.py` | Text normalization and punctuation stripping |
-| `test_ttb_labels.py` | Multi-line OCR text → field extraction (simulated OCR strings) |
-| `test_ocr_integration.py` | Full OCR pipeline against `test-picture/` images (skipped if backend unavailable) |
-
-### Web (TypeScript)
-
-```bash
-cd web && npm test
-```
+Worker tests cover field extraction, all four matching tiers, government warning enforcement, confidence scoring, and each OCR backend — no live credentials needed. Web tests cover upload validation (including magic bytes), session and auth logic, rate limiting, storage adapters, all API route handlers, and export formatting.
 
 ---
 
-## Benchmarking OCR Backends
+## Planned work
 
-Run `benchmark.py` to compare Tesseract vs Azure AI Vision side-by-side against a real label image. Outputs timing, word count, average confidence, extracted text, and per-field accuracy.
+**Bulk / batch import**
+Upload a CSV of application fields alongside a ZIP of label images. The backend parses, validates, and creates all jobs in a single transaction. Requires a dedicated batch review UI — a summary dashboard showing pass/fail counts across the batch, filterable to `needs_human` items only, with bulk export. The job creation and worker layers need no changes; the engineering effort is in the secure ZIP extraction (path traversal, decompression bomb limits) and the batch review flow.
 
-```bash
-cd worker
-.venv/Scripts/activate
+**Azure Storage Queue**
+Replace the current database polling loop with Azure Storage Queue + KEDA autoscaling. The worker and storage adapter are already structured for this swap. Benefits: backpressure handling, dead-letter queue for failed jobs, per-message audit trail, and scale-to-zero on idle.
 
-# Compare both backends on a label image
-python benchmark.py test-picture/ttblabelexample.jpg \
-  --expected-brand "Old Tom Distillery" \
-  --expected-class "Kentucky Straight Bourbon Whiskey" \
-  --expected-abv "45% alc. by vol." \
-  --expected-net "750 mL" \
-  --backend both
+**Image preprocessing**
+Deskew, contrast normalization, and glare reduction before OCR. Azure Vision handles moderate quality issues natively, but severe cases (heavy rotation, strong glare, motion blur) still fail. A preprocessing pass with OpenCV or PIL would extend the range of acceptable label photography.
 
-# Run only one backend
-python benchmark.py test-picture/ttblabelexample.jpg --backend azure
-python benchmark.py test-picture/ttblabelexample.jpg --backend tesseract
+**Infrastructure tiers**
+Move to geo-redundant Blob Storage (RA-GRS), PostgreSQL Business Critical with zone redundancy, and a higher Azure Vision tier for increased throughput and SLA. Relevant for production volume and any data residency or backup requirements.
 
-# Output raw JSON (useful for scripting or logging results over time)
-python benchmark.py test-picture/ttblabelexample.jpg --backend both --json
-```
+**Azure AD authentication**
+Replace the shared invite code with per-agent Microsoft accounts. Gets you MFA, Conditional Access policies, RBAC (senior agent vs. reviewer vs. admin), and a full audit log of who reviewed what and when. The session cookie model in the current code maps directly to a token issued on AD login.
 
-Place additional test images in `worker/test-picture/` — they are committed to the repo (generated/synthetic images only, not real brand labels). The OCR integration tests also pick them up automatically.
-
----
-
-## Project Structure
-
-```
-labelPilot/
-  web/                    Next.js app (App Router + TypeScript + Prisma)
-    prisma/               Schema + migrations + SQLite DB file
-    src/
-      app/                Pages + API route handlers
-      lib/                Shared utilities (session, rate limit, storage adapter)
-      types/              Shared TypeScript types
-    __tests__/            Unit tests
-  worker/                 Python polling worker
-    ocr.py                OCR backend router (tesseract / azure / stub)
-    ocr_azure.py          Azure AI Vision backend
-    ocr_protocol.py       OcrResult TypedDict — contract all backends must satisfy
-    extraction.py         4-tier field extractor (exact → soft → word → OCR-corrected)
-    comparison.py         Multi-level comparison logic
-    benchmark.py          CLI tool to compare backends against a label image
-    tests/                Worker tests (unit + OCR integration)
-    test-picture/         Synthetic test images (committed)
-  local_uploads/          Uploaded label images (gitignored)
-  scripts/                Dev utilities (cleanup, etc.)
-  docs/                   Architecture, API, worker, testing docs
-```
-
----
-
-## How to Dockerize / Migrate to Azure
-
-See `docs/ARCHITECTURE.md` for full details. High-level steps:
-
-1. **Add `output: 'standalone'`** to `web/next.config.ts`
-2. **Write `Dockerfile` for web** — FROM node:18-alpine, copy standalone build, expose 3000
-3. **Write `Dockerfile` for worker** — FROM python:3.11-slim, install pip deps (no Tesseract binary needed when using `OCR_BACKEND=azure`)
-4. **Write `docker-compose.yml`** with services: `web`, `worker`, `db` (postgres)
-5. **Swap storage adapter** — replace `web/src/lib/storage/local.ts` with `azure-blob.ts` (same interface)
-6. **Swap queue adapter** — replace DB polling in worker with Azure Storage Queue consumer
-7. **Swap database** — change `DATABASE_URL` to postgres, update Prisma provider
-8. **Use Managed Identity** — remove `AZURE_VISION_KEY`, assign the container a Managed Identity with Cognitive Services User role
-
-Required env vars for Azure deployment:
-- `AZURE_VISION_ENDPOINT` (no key — Managed Identity handles auth)
-- `AZURE_STORAGE_CONNECTION_STRING`
-- `AZURE_STORAGE_CONTAINER`
-- `AZURE_QUEUE_NAME`
-- `DATABASE_URL` (postgres connection string)
-- `NEXTAUTH_SECRET` (for Microsoft login)
-- `AZURE_AD_CLIENT_ID` / `AZURE_AD_CLIENT_SECRET` / `AZURE_AD_TENANT_ID`
-
----
-
-## Retention Policy
-
-- Every job has `expiresAt = createdAt + 24h`
-- Run `npm run cleanup` (from `web/`) to purge expired jobs and their files
-- Users can also click **Delete** on the review or history page
-
----
-
-## Limitations (MVP)
-
-- Brand name and class/type extraction is best-effort string matching — no image preprocessing (upscaling, deskew, contrast enhancement) is applied before OCR
-- No authentication — session is a UUID cookie (no login UI yet)
-- Rate limiting is in-memory; restart clears state (use Redis in production)
-- Azure AI Vision F0 free tier: 5,000 calls/month, 20 calls/minute — upgrade to S1 for production volume
+**COLA integration**
+Pull application data directly from TTB's internal system rather than requiring agents to key in fields manually. Labels and declared values are pre-populated based on the agent's assigned queue. This is the end state — the manual input model in this prototype is intentionally structured to make the COLA data source a straightforward swap.

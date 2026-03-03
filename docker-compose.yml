@@ -1,0 +1,53 @@
+# LabelPilot — local container stack
+#
+# Uses SQLite (shared volume) + local file storage so no Azure account is needed.
+# Perfect for smoke-testing both containers locally before cloud deployment.
+#
+# First-time setup:
+#   docker compose build
+#   docker compose up
+#
+# The web container automatically runs database migrations on startup.
+# On subsequent runs just:
+#   docker compose up
+
+services:
+
+  web:
+    build:
+      context: web
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: file:/data/dev.db
+      UPLOAD_DIR: /uploads
+      STORAGE_BACKEND: local
+      QUEUE_BACKEND: local
+      MAX_FILE_SIZE_MB: "10"
+      MAX_FILES: "10"
+      RATE_LIMIT_MAX_REQUESTS: "20"
+      RATE_LIMIT_WINDOW_MS: "60000"
+      # Set INVITE_CODE here (or in a .env file) to enable auth
+      # INVITE_CODE: change-me
+    volumes:
+      - labelpilot-db:/data        # SQLite database file
+      - labelpilot-uploads:/uploads # uploaded label images
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: worker
+    environment:
+      SQLITE_PATH: /data/dev.db
+      UPLOAD_BASE_DIR: /uploads
+      STORAGE_BACKEND: local
+    volumes:
+      - labelpilot-db:/data
+      - labelpilot-uploads:/uploads
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  labelpilot-db:
+  labelpilot-uploads:

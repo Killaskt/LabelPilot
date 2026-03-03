@@ -15,11 +15,12 @@ from typing import Optional
 from dotenv import load_dotenv
 
 
-def _resolve_env_file() -> Path:
+def _resolve_env_file() -> Optional[Path]:
     """
     Extract --env from argv before argparse runs so load_dotenv
     gets the right profile file before module-level config is read.
     Falls back to .env for backwards compatibility.
+    Returns None when no file is found (e.g. env vars injected by Docker/CI).
     """
     _pre = argparse.ArgumentParser(add_help=False)
     _pre.add_argument("--env", default=None)
@@ -36,12 +37,16 @@ def _resolve_env_file() -> Path:
         candidate = Path(__file__).parent / name
         if candidate.exists():
             return candidate
-    raise FileNotFoundError("No .env.dev or .env file found in worker/")
+    # No file found — env vars are injected by Docker/CI at runtime
+    return None
 
 
 _env_file = _resolve_env_file()
-load_dotenv(_env_file)
-print(f"[env] Loaded {_env_file.name}")
+if _env_file is not None:
+    load_dotenv(_env_file)
+    print(f"[env] Loaded {_env_file.name}")
+else:
+    print("[env] No .env file found; using environment variables from container/OS")
 
 import ocr
 import extraction

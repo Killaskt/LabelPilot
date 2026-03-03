@@ -12,6 +12,8 @@ const jobFieldsSchema = z.object({
   classType: z.string().min(1, 'Class/type is required').max(200),
   alcoholContent: z.string().min(1, 'Alcohol content is required').max(100),
   netContents: z.string().min(1, 'Net contents is required').max(100),
+  bottlerInfo: z.string().max(500).optional(),
+  countryOfOrigin: z.string().max(200).optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -35,6 +37,8 @@ export async function POST(request: NextRequest) {
     classType: formData.get('classType'),
     alcoholContent: formData.get('alcoholContent'),
     netContents: formData.get('netContents'),
+    bottlerInfo: formData.get('bottlerInfo') || undefined,
+    countryOfOrigin: formData.get('countryOfOrigin') || undefined,
   })
   if (!fieldsResult.success) {
     return errorResponse('VALIDATION_ERROR', 'Invalid application fields.', 400, fieldsResult.error.issues)
@@ -60,6 +64,8 @@ export async function POST(request: NextRequest) {
         classType: fieldsResult.data.classType,
         alcoholContent: fieldsResult.data.alcoholContent,
         netContents: fieldsResult.data.netContents,
+        bottlerInfo: fieldsResult.data.bottlerInfo ?? null,
+        countryOfOrigin: fieldsResult.data.countryOfOrigin ?? null,
         expiresAt,
         assets: {
           create: files.map((file, i) => ({

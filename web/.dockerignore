@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.local
+.env.dev
+.env.hybrid
+.env.prod
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+coverage
+__tests__
+.git

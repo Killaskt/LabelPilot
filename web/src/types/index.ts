@@ -94,6 +94,8 @@ export interface Job {
   classType: string
   alcoholContent: string
   netContents: string
+  bottlerInfo: string | null
+  countryOfOrigin: string | null
   expiresAt: string
   createdAt: string
   startedAt: string | null
