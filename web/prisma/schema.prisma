@@ -8,7 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// status: queued | processing | ready | needs_human | error | deleted | expired
+// status: queued | processing | ready | needs_human | error | submitted | deleted | expired
 model Job {
   id             String   @id @default(cuid())
   sessionId      String
