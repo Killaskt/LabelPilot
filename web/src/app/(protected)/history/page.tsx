@@ -23,6 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   ready: 'Ready',
   needs_human: 'Needs Review',
   error: 'Error',
+  submitted: 'Submitted',
   deleted: 'Deleted',
   expired: 'Expired',
 }
@@ -90,7 +91,7 @@ export default async function HistoryPage() {
             </thead>
             <tbody>
               {jobs.map((job) => {
-                const isReviewable = ['ready', 'needs_human'].includes(job.status)
+                const isReviewable = ['ready', 'needs_human', 'submitted'].includes(job.status)
                 const expiresAt = new Date(job.expiresAt)
                 const isExpiringSoon = (expiresAt.getTime() - Date.now()) < 2 * 60 * 60 * 1000
 

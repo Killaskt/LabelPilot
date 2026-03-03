@@ -212,6 +212,11 @@ export default function ReviewClient({ initialJob }: Props) {
     }
   }
 
+  const submitJob = async () => {
+    await fetch(`/api/jobs/${job.id}`, { method: 'PATCH' })
+    router.push('/history')
+  }
+
   const deleteJob = async () => {
     if (!confirm('Delete this job and its files? This cannot be undone.')) return
     await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' })
@@ -250,9 +255,14 @@ export default function ReviewClient({ initialJob }: Props) {
           <Link href={`/api/jobs/${job.id}/export?format=csv`} className="btn btn-ghost btn-sm">CSV</Link>
           <Link href={`/api/jobs/${job.id}/export?format=json`} className="btn btn-ghost btn-sm">JSON</Link>
           <button className="btn btn-danger btn-sm" onClick={deleteJob}>Delete</button>
-          {isTerminal && (
-            <button className="btn btn-primary btn-sm" onClick={() => router.push('/history')}>
+          {isTerminal && job.status !== 'submitted' && (
+            <button className="btn btn-primary btn-sm" onClick={submitJob}>
               ✓ Done
+            </button>
+          )}
+          {job.status === 'submitted' && (
+            <button className="btn btn-ghost btn-sm" onClick={() => router.push('/history')}>
+              Back to History
             </button>
           )}
         </div>

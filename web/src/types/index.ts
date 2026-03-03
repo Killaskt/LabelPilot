@@ -1,9 +1,11 @@
 export type JobStatus =
+  | 'uploading'
   | 'queued'
   | 'processing'
   | 'ready'
   | 'needs_human'
   | 'error'
+  | 'submitted'
   | 'deleted'
   | 'expired'
 
@@ -38,6 +40,7 @@ export const TERMINAL_STATUSES = new Set<JobStatus>([
   'ready',
   'needs_human',
   'error',
+  'submitted',
   'deleted',
   'expired',
 ])

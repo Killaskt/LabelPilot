@@ -34,6 +34,22 @@ export async function GET(request: NextRequest, { params }: Params) {
   return NextResponse.json({ job: { ...job, assets: assetsWithUrls } })
 }
 
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params
+  const sessionId = getSessionIdFromRequest(request)
+  if (!sessionId) {
+    return errorResponse('UNAUTHORIZED', 'No session found.', 401)
+  }
+
+  const job = await prisma.job.findFirst({ where: { id, sessionId } })
+  if (!job) {
+    return errorResponse('NOT_FOUND', 'Job not found.', 404)
+  }
+
+  await prisma.job.update({ where: { id }, data: { status: 'submitted' } })
+  return NextResponse.json({ ok: true })
+}
+
 export async function DELETE(request: NextRequest, { params }: Params) {
   const { id } = await params
   const sessionId = getSessionIdFromRequest(request)
