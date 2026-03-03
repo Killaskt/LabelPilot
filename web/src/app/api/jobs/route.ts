@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     job = await prisma.job.create({
       data: {
         sessionId,
-        status: 'queued',
+        status: 'uploading',
         brandName: fieldsResult.data.brandName,
         classType: fieldsResult.data.classType,
         alcoholContent: fieldsResult.data.alcoholContent,
@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
     await getStorageAdapter().deleteJob(job.id).catch(() => undefined)
     return errorResponse('STORAGE_ERROR', 'Failed to save uploaded files.', 500)
   }
+
+  await prisma.job.update({ where: { id: job.id }, data: { status: 'queued' } })
 
   const response = NextResponse.json({ jobId: job.id }, { status: 201 })
   if (isNew) {
