@@ -379,7 +379,7 @@ export default function UploadPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="card"
-            style={{ width: 360, padding: '1.25rem' }}
+            style={{ width: 360, maxWidth: '90vw', padding: '1.25rem' }}
           >
             <h2 style={{ fontSize: '1rem', marginBottom: '0.75rem' }}>Save as template</h2>
             <label className="form-label" htmlFor="templateName">Template name</label>
@@ -407,7 +407,7 @@ export default function UploadPage() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
         >
           <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: 480, maxWidth: '95vw', padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h2 style={{ fontSize: '1rem', margin: 0 }}>Expected import format</h2>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowSchemaModal(false)}>✕</button>
             </div>
@@ -446,11 +446,11 @@ export default function UploadPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
+      <form onSubmit={handleSubmit} style={{ maxWidth: 640, width: '100%' }}>
         <div className="card mb-2">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem' }}>
+          <div className="card-header">
             <h2 style={{ margin: 0 }}>Application Fields</h2>
-            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => csvInputRef.current?.click()}>From CSV</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => jsonInputRef.current?.click()}>From JSON</button>
               <button

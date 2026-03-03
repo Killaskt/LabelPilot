@@ -95,7 +95,7 @@ export default function QueuePage() {
 
   return (
     <main className="page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h1>Job Queue</h1>
           <p className="page-subtitle">Jobs from the last 24 hours. Auto-refreshes every 2 seconds while processing.</p>

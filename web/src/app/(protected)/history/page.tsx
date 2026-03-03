@@ -53,7 +53,7 @@ export default async function HistoryPage() {
 
   return (
     <main className="page">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h1>Review History</h1>
           <p className="page-subtitle">

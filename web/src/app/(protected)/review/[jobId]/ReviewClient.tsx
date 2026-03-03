@@ -219,7 +219,7 @@ export default function ReviewClient({ initialJob }: Props) {
   }
 
   return (
-    <main style={{
+    <main className="review-main" style={{
       height: 'calc(100vh - 56px)',
       display: 'flex',
       flexDirection: 'column',
@@ -269,12 +269,12 @@ export default function ReviewClient({ initialJob }: Props) {
       )}
 
       {/* ── Split pane ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 0 }}>
+      <div className="review-split" style={{ flex: 1, minHeight: 0, display: 'flex', gap: 0 }}>
 
         {/* Left: Field checklist */}
-        <div style={{ width: panelWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <div className="review-panel-left" style={{ width: panelWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
           <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
-            <div style={{ flexShrink: 0, padding: '0.75rem 1rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ flexShrink: 0, padding: '0.75rem 1rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.35rem' }}>
               <h2 style={{ fontSize: '0.9rem', margin: 0 }}>Compliance Checklist</h2>
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
                 {job.results.filter((r) => r.status === 'match').length > 0
@@ -467,6 +467,7 @@ export default function ReviewClient({ initialJob }: Props) {
 
         {/* Resize handle */}
         <div
+          className="review-resize-handle"
           onMouseDown={onDragStart}
           style={{ width: 10, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }}
           title="Drag to resize"
@@ -478,7 +479,7 @@ export default function ReviewClient({ initialJob }: Props) {
         </div>
 
         {/* Right: Image viewer */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="review-panel-right" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
 
             {/* Asset tabs + zoom controls */}
