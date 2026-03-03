@@ -39,9 +39,34 @@ Bottler name/address and country of origin can be entered as optional context. T
 ---
 
 ## Dev Tooling
---- ideation and fighting tougher bugs, assist building to move fast
-- Claude Code
-- Cursor, Azure MCP Server 
+
+- **Claude Code** — primary coding assistant; used for implementation, debugging, and iterating quickly under time pressure
+- **Cursor** — editor with inline AI assistance for boilerplate and refactoring
+- **Azure MCP Server** — Azure resource queries during infrastructure setup
+
+---
+
+## Assumptions
+
+- **Manual field entry** — agents key in the declared application values. In production these would come from COLA. The architecture is structured so that swap is a data-source change, not a redesign.
+- **Single-tenant prototype** — a shared invite code is sufficient for evaluation. Real multi-agent use would require per-account auth (see Planned Work).
+- **Label photography quality** — reasonable photo quality assumed (upright, in-focus, adequate lighting). Heavy skew, glare, or motion blur will reduce OCR accuracy; a preprocessing pass is called out in Planned Work.
+- **English-language labels only** — extraction logic targets US TTB requirements and English field values.
+- **One application per submission** — each upload represents one product application. Bulk/batch import is a planned feature.
+- **24-hour data retention** — acceptable for a prototype. A production deployment would align retention to the agency's records schedule.
+
+---
+
+## Trade-offs and Limitations
+
+**What works, and where it stops:**
+
+- OCR accuracy is good on clean, well-lit photos of standard labels. Decorative fonts, severe skew, and low-contrast printing will produce `needs_human` flags — intentionally, rather than a wrong confident answer.
+- Government warning enforcement checks for the required all-caps `GOVERNMENT WARNING:` prefix and flags title-case variants. It does not verify the full warning text word-for-word.
+- Bottler name and country of origin are collected and shown in the review checklist but are **not OCR-verified** in this version — they require contextual layout understanding beyond simple regex extraction.
+- The worker runs as a single process polling the database. This is fine for prototype load; for production throughput it would move to Azure Storage Queue with KEDA autoscaling (see Planned Work).
+- Storage and database are currently internet-accessible with credential auth. Private endpoints and Managed Identity are the production path (called out in Security section).
+- No image preprocessing — the pipeline sends images to Azure Vision as-is. OpenCV deskew/contrast normalization would improve results on difficult photography.
 
 ---
 
